@@ -3,6 +3,7 @@ pub mod pb {
 }
 
 use std::{ error::Error, io::ErrorKind, net::ToSocketAddrs, pin::Pin, time::Duration };
+use log::info;
 use tokio::sync::mpsc;
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
 use tonic::{ transport::Server, Request, Response, Status, Streaming };
@@ -66,6 +67,11 @@ impl pb::echo_server::Echo for EchoServer {
         let (tx, rx) = mpsc::channel(128);
         tokio::spawn(async move {
             while let Some(item) = stream.next().await {
+                info!(
+                    "Task completed on thread {:?} id : {:?}",
+                    std::thread::current().name().unwrap(),
+                    std::thread::current().id()
+                );
                 match tx.send(Result::<_, Status>::Ok(item)).await {
                     Ok(_) => {
                         // item (server response) was queued to be send to client
@@ -139,8 +145,11 @@ impl pb::echo_server::Echo for EchoServer {
     }
 }
 
-#[tokio::main]
+// #[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+// #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let server = EchoServer {};
     Server::builder()
         .add_service(pb::echo_server::EchoServer::new(server))
