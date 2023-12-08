@@ -4,10 +4,9 @@ pub mod pb {
 
 use std::{ error::Error, io::ErrorKind, net::ToSocketAddrs, pin::Pin, time::Duration };
 use log::info;
-use tokio::sync::mpsc;
+use tokio::{ sync::mpsc, runtime::Builder };
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
 use tonic::{ transport::Server, Request, Response, Status, Streaming };
-
 use pb::{ EchoRequest, EchoResponse };
 
 type EchoResult<T> = Result<Response<T>, Status>;
@@ -146,15 +145,23 @@ impl pb::echo_server::Echo for EchoServer {
 }
 
 // #[tokio::main]
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+// #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-    let server = EchoServer {};
-    Server::builder()
-        .add_service(pb::echo_server::EchoServer::new(server))
-        .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await
-        .unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rt = Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap();
+
+    rt.block_on(async {
+        env_logger::init();
+        let server = EchoServer {};
+        Server::builder()
+            .add_service(pb::echo_server::EchoServer::with_interceptor(server, interceptor))
+            .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await
+            .unwrap();
+    });
 
     Ok(())
+}
+
+fn interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+    Ok(request)
 }

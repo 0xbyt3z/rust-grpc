@@ -34,16 +34,16 @@ async fn streaming_echo(mut client: EchoClient<Channel>, num: usize) {
     handle.await.unwrap();
 }
 
-// #[tokio::main]
+#[tokio::main]
 // #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
-#[tokio::main(flavor = "current_thread")]
+// #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let client = EchoClient::connect("http://[::1]:50051").await.unwrap();
 
     println!("Streaming echo:");
-    streaming_echo(client, 50).await;
+    streaming_echo(client, 10).await;
     tokio::time::sleep(Duration::from_secs(1)).await; //do not mess server println functions
 
     Ok(())
