@@ -63,7 +63,7 @@ impl pb::echo_server::Echo for EchoServer {
 
         // spawn and channel are required if you want handle "disconnect" functionality
         // the `out_stream` will not be polled after client disconnect
-        let (tx, rx) = mpsc::channel(128);
+        let (tx, rx) = mpsc::channel(4);
         tokio::spawn(async move {
             while let Some(item) = stream.next().await {
                 info!(
@@ -71,6 +71,8 @@ impl pb::echo_server::Echo for EchoServer {
                     std::thread::current().name().unwrap(),
                     std::thread::current().id()
                 );
+                tokio::time::sleep(Duration::from_secs(5)).await;
+
                 match tx.send(Result::<_, Status>::Ok(item)).await {
                     Ok(_) => {
                         // item (server response) was queued to be send to client
@@ -148,7 +150,7 @@ impl pb::echo_server::Echo for EchoServer {
 // #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let rt = Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap();
+    let rt = Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
 
     rt.block_on(async {
         env_logger::init();
