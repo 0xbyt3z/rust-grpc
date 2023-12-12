@@ -2,7 +2,7 @@ pub mod pb {
     tonic::include_proto!("grpc.examples.echo");
 }
 
-use std::time::Duration;
+use std::{time::Duration};
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use log::info;
@@ -10,7 +10,8 @@ use log::info;
 use pb::{ echo_client::EchoClient, EchoRequest };
 
 async fn streaming_echo(mut client: EchoClient<Channel>, num: usize,msg:String) {
-    let handle = tokio::spawn(async move {
+        let _ = tokio::time::timeout(Duration::from_secs(10),
+        async move {
         let stream = client
             .server_streaming_echo(EchoRequest {
                 message: msg,
@@ -20,6 +21,7 @@ async fn streaming_echo(mut client: EchoClient<Channel>, num: usize,msg:String) 
 
         // stream is infinite - take just 5 elements and then disconnect
         let mut stream = stream.take(num);
+
         while let Some(item) = stream.next().await {
             info!(
                 "\treceived: {} on thread :{:?} id : {:?}",
@@ -29,9 +31,8 @@ async fn streaming_echo(mut client: EchoClient<Channel>, num: usize,msg:String) 
             );
         }
         // stream is droped here and the disconnect info is send to server
-    });
+    }).await.expect("Timeout");
 
-    handle.await.unwrap();
 }
 
 #[tokio::main]

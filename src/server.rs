@@ -6,9 +6,8 @@ use std::{ error::Error, io::ErrorKind, net::ToSocketAddrs, pin::Pin, time::Dura
 use log::info;
 use tokio::{ sync::mpsc, runtime::Builder };
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
-use tonic::{ transport::Server, Request, Response, Status, Streaming };
+use tonic::{ Request, Response, Status, Streaming };
 use pb::{ EchoRequest, EchoResponse };
-
 type EchoResult<T> = Result<Response<T>, Status>;
 type ResponseStream = Pin<Box<dyn Stream<Item = Result<EchoResponse, Status>> + Send>>;
 
@@ -71,7 +70,7 @@ impl pb::echo_server::Echo for EchoServer {
                     std::thread::current().name().unwrap(),
                     std::thread::current().id()
                 );
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
 
                 match tx.send(Result::<_, Status>::Ok(item)).await {
                     Ok(_) => {
@@ -146,17 +145,43 @@ impl pb::echo_server::Echo for EchoServer {
     }
 }
 
+
+
+
+
+//tower service
+
+fn auth_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+    if true {
+        println!("tower serrrrvice called");
+        Ok(request)
+    } else {
+        Err(Status::unauthenticated("invalid credentials"))
+    }
+}
+
+
+
 // #[tokio::main]
 // #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
 
+    let layer = tower::ServiceBuilder::new()
+    .timeout(Duration::from_secs(30))
+    .layer(tonic::service::interceptor(auth_interceptor))
+    // .layer(auth_interceptor)
+    .into_inner();
+
     rt.block_on(async {
         env_logger::init();
         let server = EchoServer {};
-        Server::builder()
-            .add_service(pb::echo_server::EchoServer::with_interceptor(server, interceptor))
+        tonic::transport::Server::builder()
+                // .add_service(tower::service_fn(move |request| my_service.call(request)))
+                .layer(layer)
+
+            .add_service(pb::echo_server::EchoServer::new(server))
             .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await
             .unwrap();
     });
@@ -164,6 +189,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn interceptor(request: Request<()>) -> Result<Request<()>, Status> {
-    Ok(request)
-}
+// fn interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+//  let req =  &request;
+//     // println!("{:?}",req.into_inner());
+//     Ok(request)
+// }
