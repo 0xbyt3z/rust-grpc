@@ -9,11 +9,11 @@ use log::info;
 
 use pb::{ echo_client::EchoClient, EchoRequest };
 
-async fn streaming_echo(mut client: EchoClient<Channel>, num: usize) {
+async fn streaming_echo(mut client: EchoClient<Channel>, num: usize,msg:String) {
     let handle = tokio::spawn(async move {
         let stream = client
             .server_streaming_echo(EchoRequest {
-                message: "foo".into(),
+                message: msg,
             }).await
             .unwrap()
             .into_inner();
@@ -39,11 +39,10 @@ async fn streaming_echo(mut client: EchoClient<Channel>, num: usize) {
 // #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-
     let client = EchoClient::connect("http://[::1]:50051").await.unwrap();
 
     println!("Streaming echo:");
-    streaming_echo(client, 10).await;
+    streaming_echo(client, 10,std::env::args().nth(1).expect("Error please enter a string")).await;
     tokio::time::sleep(Duration::from_secs(1)).await; //do not mess server println functions
 
     Ok(())

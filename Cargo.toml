@@ -33,10 +33,5 @@ path = "src/client.rs"
 
 
 [[bin]]
-name = "tower-client"
-path = "src/tower/client.rs"
-
-
-[[bin]]
-name = "tower-server"
-path = "src/tower/server.rs"
+name = "test"
+path = "src/test.rs"

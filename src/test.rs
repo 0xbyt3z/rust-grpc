@@ -1,5 +1,6 @@
-fn main(){
+use std::env;
 
-    let mut number: u32  = 5;
-    print
+fn main(){
+     let args: Vec<String> = env::args().collect();
+  println!("{:?}",args[1]);
 }
