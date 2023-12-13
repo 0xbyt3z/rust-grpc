@@ -8,6 +8,8 @@ use tokio::{ sync::mpsc, runtime::Builder };
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
 use tonic::{ Request, Response, Status, Streaming };
 use pb::{ EchoRequest, EchoResponse };
+use tower::ServiceExt;
+
 type EchoResult<T> = Result<Response<T>, Status>;
 type ResponseStream = Pin<Box<dyn Stream<Item = Result<EchoResponse, Status>> + Send>>;
 
@@ -145,42 +147,73 @@ impl pb::echo_server::Echo for EchoServer {
     }
 }
 
-
-
-
-
 //tower service
 
-fn auth_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
-    if true {
-        println!("tower serrrrvice called");
-        Ok(request)
-    } else {
-        Err(Status::unauthenticated("invalid credentials"))
+#[derive(Debug, Default)]
+struct CustomTowerService;
+
+impl tower_service::Service<&str> for CustomTowerService {
+    type Response = String;
+    type Error = Status;
+    type Future = core::future::Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: &str) -> Self::Future {
+        // Simulate some processing and return a response
+        let response = format!("Hello, {}!", request);
+        core::future::ready(Ok(response))
     }
 }
 
+fn layer1(mut request: Request<()>) -> Result<Request<()>, Status> {
+    if true {
+        println!("layer1 called {:?}", request.metadata());
 
+        // Append the metadata to the request
+        request.metadata_mut().insert("key1", "value1".parse().unwrap());
+        Ok(request)
+    } else {
+        Err(Status::not_found("Random Error"))
+    }
+}
+
+fn layer2(request: Request<()>) -> Result<Request<()>, Status> {
+    if true {
+        println!("layer2 called {:?}", request.metadata());
+        Ok(request)
+    } else {
+        Err(Status::not_found("Random Error"))
+    }
+}
 
 // #[tokio::main]
 // #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let my_tower_service = CustomTowerService;
     let rt = Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
 
-    let layer = tower::ServiceBuilder::new()
-    .timeout(Duration::from_secs(30))
-    .layer(tonic::service::interceptor(auth_interceptor))
-    // .layer(auth_interceptor)
-    .into_inner();
+    let layer = tower::ServiceBuilder
+        ::new()
+        .timeout(Duration::from_secs(1))
+        .layer(tonic::service::interceptor(layer1))
+        .layer(tonic::service::interceptor(layer2))
+        // .layer(my_tower_service)
+        .into_inner();
 
     rt.block_on(async {
         env_logger::init();
         let server = EchoServer {};
-        tonic::transport::Server::builder()
-                // .add_service(tower::service_fn(move |request| my_service.call(request)))
-                .layer(layer)
-
+        tonic::transport::Server
+            ::builder()
+            // .add_service(tower::service_fn(move |request| my_service.call(request)))
+            .layer(layer)
             .add_service(pb::echo_server::EchoServer::new(server))
             .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await
             .unwrap();

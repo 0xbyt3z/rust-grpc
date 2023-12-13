@@ -1006,6 +1006,7 @@ dependencies = [
  "tonic-build",
  "tower",
  "tower-grpc",
+ "tower-service 0.3.2",
 ]
 
 [[package]]
