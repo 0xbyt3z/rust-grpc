@@ -16,7 +16,6 @@ tonic = "0.10.2"
 hyper = { version = "1", features = ["full"] }
 tower = "0.4.13"
 tower-grpc = "0.1.1"
-http = "1.0.0"
 tower-service = "0.3.2"
 
 

@@ -996,7 +996,6 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "h2 0.4.0",
- "http 1.0.0",
  "hyper 1.0.1",
  "log",
  "prost 0.12.3",

@@ -5,13 +5,20 @@ pub mod pb {
 mod service;
 mod layers;
 
-use std::{ error::Error, io::ErrorKind, net::ToSocketAddrs, pin::Pin, time::Duration };
+use std::{
+    error::Error,
+    io::ErrorKind,
+    net::ToSocketAddrs,
+    pin::Pin,
+    time::Duration,
+    task::{ Context, Poll },
+};
 use log::info;
 use tokio::{ sync::mpsc, runtime::Builder };
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
-use tonic::{ Request, Response, Status, Streaming };
+use tonic::{ Request, Response, Status, Streaming, transport::Body };
+use tower::{ Layer, Service };
 use pb::{ EchoRequest, EchoResponse };
-use tower::ServiceExt;
 type EchoResult<T> = Result<Response<T>, Status>;
 type ResponseStream = Pin<Box<dyn Stream<Item = Result<EchoResponse, Status>> + Send>>;
 
@@ -153,28 +160,84 @@ impl pb::echo_server::Echo for EchoServer {
 // #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // let my_service = service::MyTowerService {};
+    env_logger::init();
+
     let rt = Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
 
     let layer = tower::ServiceBuilder
         ::new()
-        .layer(tonic::service::interceptor(layers::layer1))
+        .layer(MyMiddlewareLayer::default())
         // .layer(tonic::service::interceptor(layer2))
         .into_inner();
 
-    let my_service = service::MyTowerService::new();
-
     rt.block_on(async {
-        env_logger::init();
         let server = EchoServer {};
 
-        tonic::transport::Server
+        let _ = tonic::transport::Server
             ::builder()
             .layer(layer)
-            // .add_service(pb::echo_server::EchoServer::new(server))
-            .add_service(tower::service_fn(move |request| my_service.call(request)))
-            .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await
-            .unwrap();
+            .add_service(pb::echo_server::EchoServer::new(server))
+            .serve("[::1]:50051".to_socket_addrs().unwrap().next().unwrap()).await;
     });
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Default)]
+struct MyMiddlewareLayer;
+
+impl<S> Layer<S> for MyMiddlewareLayer {
+    type Service = MyMiddleware<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        MyMiddleware { inner: service }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MyMiddleware<S> {
+    inner: S,
+}
+
+type BoxFuture<'a, T> = Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+impl<S> Service<tonic::codegen::http::request::Request<tonic::transport::Body>>
+    for MyMiddleware<S>
+    where
+        S: Service<
+            tonic::codegen::http::request::Request<tonic::transport::Body>,
+            Response = tonic::codegen::http::Response<tonic::body::BoxBody>
+        > +
+            Clone +
+            Send +
+            'static,
+        S::Future: Send + 'static
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        info!("{:?}", self.inner.poll_ready(cx).is_pending());
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(
+        &mut self,
+        req: tonic::codegen::http::request::Request<tonic::transport::Body>
+    ) -> Self::Future {
+        // This is necessary because tonic internally uses `tower::buffer::Buffer`.
+        // See https://github.com/tower-rs/tower/issues/547#issuecomment-767629149
+        // for details on why this is necessary
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
+
+        Box::pin(async move {
+            // Do extra async work here...
+            let response = inner.call(req).await?;
+
+            Ok(response)
+        })
+    }
 }
