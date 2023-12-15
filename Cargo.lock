@@ -1006,6 +1006,7 @@ dependencies = [
  "tower",
  "tower-grpc",
  "tower-service 0.3.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1418,6 +1419,15 @@ name = "unicode-xid"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
+
+[[package]]
+name = "uuid"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
+dependencies = [
+ "getrandom",
+]
 
 [[package]]
 name = "want"

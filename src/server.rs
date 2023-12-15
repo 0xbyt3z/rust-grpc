@@ -2,7 +2,6 @@ pub mod pb {
     tonic::include_proto!("grpc.examples.echo");
 }
 
-mod service;
 mod layers;
 
 use std::{
@@ -16,7 +15,7 @@ use std::{
 use log::info;
 use tokio::{ sync::mpsc, runtime::Builder };
 use tokio_stream::{ wrappers::ReceiverStream, Stream, StreamExt };
-use tonic::{ Request, Response, Status, Streaming, transport::Body };
+use tonic::{ Request, Response, Status, Streaming };
 use tower::{ Layer, Service };
 use pb::{ EchoRequest, EchoResponse };
 type EchoResult<T> = Result<Response<T>, Status>;
@@ -160,15 +159,14 @@ impl pb::echo_server::Echo for EchoServer {
 // #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 // #[tokio::main(flavor = "current_thread")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let my_service = service::MyTowerService {};
     env_logger::init();
 
     let rt = Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
-
     let layer = tower::ServiceBuilder
         ::new()
         .layer(MyMiddlewareLayer::default())
-        // .layer(tonic::service::interceptor(layer2))
+        .layer(tonic::service::interceptor(layers::layer1))
+        .layer(tonic::service::interceptor(layers::layer2))
         .into_inner();
 
     rt.block_on(async {
@@ -219,7 +217,6 @@ impl<S> Service<tonic::codegen::http::request::Request<tonic::transport::Body>>
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        info!("{:?}", self.inner.poll_ready(cx).is_pending());
         self.inner.poll_ready(cx)
     }
 
@@ -230,13 +227,21 @@ impl<S> Service<tonic::codegen::http::request::Request<tonic::transport::Body>>
         // This is necessary because tonic internally uses `tower::buffer::Buffer`.
         // See https://github.com/tower-rs/tower/issues/547#issuecomment-767629149
         // for details on why this is necessary
-        let clone = self.inner.clone();
-        let mut inner = std::mem::replace(&mut self.inner, clone);
+
+        // This subtly breaks the contract. The service is driven to ready and then cloned before it is invoked. The original service is ready, but the clone is not necessarily ready.
+
+        // To fix this, the call function could be rewritten as:
+
+        //        Box::pin(self.0.call(req).err_into::<Error>())
+        // which avoids the cloning.
+
+        // If cloning is really necessary, you could use let mut inner = mem::replace(&mut self.0, self.0.clone()) to "take" the ready service and replace it with the clone.
+
+        let mut clone = self.inner.clone();
+        // let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
-            // Do extra async work here...
-            let response = inner.call(req).await?;
-
+            let response = clone.call(req).await?;
             Ok(response)
         })
     }

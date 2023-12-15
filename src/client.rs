@@ -2,7 +2,7 @@ pub mod pb {
     tonic::include_proto!("grpc.examples.echo");
 }
 
-use std::{ time::Duration };
+use std::time::Duration;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use log::info;
@@ -43,7 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = EchoClient::connect("http://[::1]:50051").await.unwrap();
 
     println!("Streaming echo:");
-    streaming_echo(client, 10, std::env::args().nth(1).expect("Error please enter a string")).await;
+    streaming_echo(
+        client,
+        100,
+        std::env::args().nth(1).expect("Error please enter a string")
+    ).await;
     tokio::time::sleep(Duration::from_secs(1)).await; //do not mess server println functions
 
     Ok(())
