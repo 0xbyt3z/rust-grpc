@@ -3,7 +3,6 @@ name = "rust-grpc"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 env_logger = "0.10.1"
@@ -13,11 +12,7 @@ prost = "0.12.3"
 tokio = { version = "1.34.0", features = ["full"] }
 tokio-stream = "0.1.14"
 tonic = "0.10.2"
-hyper = { version = "1", features = ["full"] }
 tower = "0.4.13"
-tower-grpc = "0.1.1"
-tower-service = "0.3.2"
-uuid = { version = "1.6.1", features = ["v4"] }
 
 
 [build-dependencies]
@@ -32,8 +27,3 @@ path = "src/server.rs"
 [[bin]]
 name = "client"
 path = "src/client.rs"
-
-
-[[bin]]
-name = "test"
-path = "src/test.rs"
